@@ -348,10 +348,10 @@
     var officeBox = document.createElement("div");
     officeBox.className = "office-info-box";
     officeBox.innerHTML =
-            '<div class="office-info-title">Bitte einen Safe Point auswählen</div>' +
-      		'<div class="office-info-muted"> grün = geöffnet <br> gelb = keine festen Öffnungszeiten hinterlegt <br> grau = geschlossen </div>';
-	
-	  // Insert at top of routing panel
+      '<div class="office-info-title">Bitte einen Safe Point auswählen</div>' +
+      '<div class="office-info-muted"> grün = geöffnet <br> gelb = keine festen Öffnungszeiten hinterlegt <br> grau = geschlossen </div>';
+
+    // Insert at top of routing panel
     var routingContainer = routingControl.getContainer();
     routingContainer.insertBefore(officeBox, routingContainer.firstChild);
     
@@ -366,9 +366,9 @@
       L.DomEvent.preventDefault(e);
       hideRoutingPanel();
     });
-
-    // append at the bottom of the routing panel
-    routingContainer.appendChild(closePanelBtn);
+    
+	// Close button between Office Hours and Route
+	officeBox.insertAdjacentElement("afterend", closePanelBtn);
 
     function setCloseButtonVisible(visible) {
       closePanelBtn.classList.toggle("hidden", !visible);
@@ -468,9 +468,9 @@
     	userMarker = L.marker(userLatLng, {
       	icon: ICONS.user,
       	zIndexOffset: 1000
-   	 }).addTo(map).bindPopup("Sie sind hier.");
-  	} else {
-    userMarker.setLatLng(userLatLng);
+    	}).addTo(map).bindPopup("Sie sind hier.");
+    } else {
+    	userMarker.setLatLng(userLatLng);
   	}
 
 
