@@ -87,6 +87,22 @@
     .routing-toggle-control.hidden {
       display: none !important;
     }
+    
+    /* Close button at bottom of routing panel (hidden until destination chosen) */
+    .routing-close-btn {
+      width: 100%;
+      margin-top: 8px;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: #f6f6f6;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .routing-close-btn.hidden {
+      display: none !important;
+    }
   </style>
 </head>
 
@@ -338,6 +354,25 @@
     // Insert at top of routing panel
     var routingContainer = routingControl.getContainer();
     routingContainer.insertBefore(officeBox, routingContainer.firstChild);
+    
+    // Close button at bottom of routing panel
+    var closePanelBtn = document.createElement("button");
+    closePanelBtn.type = "button";
+    closePanelBtn.className = "routing-close-btn hidden";
+    closePanelBtn.textContent = "Wegbeschreibung schließen";
+
+    L.DomEvent.disableClickPropagation(closePanelBtn);
+    L.DomEvent.on(closePanelBtn, "click", function (e) {
+      L.DomEvent.preventDefault(e);
+      hideRoutingPanel();
+    });
+
+    // append at the bottom of the routing panel
+    routingContainer.appendChild(closePanelBtn);
+
+    function setCloseButtonVisible(visible) {
+      closePanelBtn.classList.toggle("hidden", !visible);
+    }
 
     // Prevent panel clicks from dragging map
     L.DomEvent.disableClickPropagation(officeBox);
@@ -496,6 +531,8 @@
         var newId = dest.officeKey || dest.label;   // stable identifier
    		var isNewDestination = (activeDestId !== newId);
     	activeDestId = newId;
+        
+        setCloseButtonVisible(true); 
 
     	if (isNewDestination) showRoutingPanel();
 
