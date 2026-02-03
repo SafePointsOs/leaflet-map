@@ -306,7 +306,7 @@
        Map
        ============================== */
        
-    var map = L.map("map").setView([52.28214, 8.05521], 13);
+    var map = L.map("map").setView([52.28497, 8.02612], 13);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
@@ -452,18 +452,16 @@
       enableHighAccuracy: true,
       maximumAge: 5000
     });
+    
+    var didCenterOnUser = false;
 
-    map.on("locationfound", function (e) {
-      userLatLng = e.latlng;
+	map.on("locationfound", function (e) {
+  		userLatLng = e.latlng;
 
-      if (!userMarker) {
-		// Pin for current Location
-        userMarker = L.marker(userLatLng, { icon: ICONS.user })
-          .addTo(map)
-          .bindPopup("Sie sind hier.");
-      } else {
-        userMarker.setLatLng(userLatLng);
-      }
+  		if (!didCenterOnUser) {
+    		map.setView(userLatLng, 14);   // choose zoom level
+    			didCenterOnUser = true;
+  }
 
       // If a destination has been selected: reroute at most every 10s
       if (activeDestLatLng) {
