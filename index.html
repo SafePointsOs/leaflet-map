@@ -348,10 +348,10 @@
     var officeBox = document.createElement("div");
     officeBox.className = "office-info-box";
     officeBox.innerHTML =
-      '<div class="office-info-title">Bitte einen Safe Point auswählen</div>' +
-      '<div class="office-info-muted">Sie erhalten Informationen zu den Öffnungszeiten und,<br>wenn Sie Zugriff auf Ihren Standort erlaubt haben, <br>eine Wegbeschreibung zum jeweiligen Safe Point. <br> <br> grün = geöffnet; <br> gelb = keine festen Zeiten angegeben <br> grau = geschlossen </div>';
-
-    // Insert at top of routing panel
+            '<div class="office-info-title">Bitte einen Safe Point auswählen</div>' +
+      		'<div class="office-info-muted"> grün = geöffnet <br> gelb = keine festen Öffnungszeiten hinterlegt <br> grau = geschlossen </div>';
+	
+	  // Insert at top of routing panel
     var routingContainer = routingControl.getContainer();
     routingContainer.insertBefore(officeBox, routingContainer.firstChild);
     
