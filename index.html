@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Safe Points Map</title>
+
+  <!-- Leaflet (CDNJS) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+
+  <!-- Leaflet Routing Machine (CDNJS) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.css">
+
+  <style>
+    body { margin: 0; padding: 16px; font-family: system-ui, Arial, sans-serif; }
+    #map { height: 560px; width: 100%; }
+
+    /* No Custom Destinations Beyond Markers */
+    .leaflet-routing-geocoders { display: none !important; }
+    .leaflet-routing-add-waypoint { display: none !important; }
+    .leaflet-routing-remove-waypoint { display: none !important; }
+    .leaflet-routing-reverse-waypoints { display: none !important; }
+
+    /* Box for Opening Hours and Instructions */
+    .office-info-box {
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fff;
+      font-size: 14px;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+
+    /* Force Uniform Line Height */
+    .office-info-box,
+    .office-info-box * {
+      line-height: 1.3 !important;
+    }
+
+    .office-info-title { font-weight: 700; margin-bottom: 4px; }
+    .office-info-muted { color: #555; font-size: 13px; }
+
+    /* Phonenumbers Blue and Inline */
+    .office-info-box a[href^="tel:"],
+    .office-info-box a[href^="tel:"]:visited {
+      color: #0b66c3 !important;
+
+      font-size: inherit !important;
+      line-height: inherit !important;
+      vertical-align: baseline !important;
+
+      display: inline !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+
+    .office-info-box .phone-nowrap {
+      white-space: nowrap;
+      display: inline;
+      line-height: inherit !important;
+    }
+
+    /* ==============================
+       Mobile-friendly Panel Toggle
+       ============================== */
+
+    /* Routing-Panel Completely Hidden once Collapsed */
+    .leaflet-routing-container.leaflet-routing-container-hide,
+    .leaflet-routing-container.leaflet-routing-collapsed {
+      display: none !important;
+    }
+
+    /* Button For Re-Opening Panel */
+    .routing-toggle-control {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      line-height: 1.2;
+      cursor: pointer;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+      user-select: none;
+    }
+    .routing-toggle-control.hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="map"></div>
+
+  <!-- Leaflet -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+
+  <!-- Routing Machine -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.js"></script>
+
+  <!-- Luxon -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/luxon/3.4.4/luxon.min.js"></script>
+
+  <script>
+    var DateTime = luxon.DateTime;
+
+   
+   /* ==============================
+      Pin Icons
+      ============================== */ 
+   
+   function makePinIcon(color) {
+      var svg =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">' +
+          '<path d="M12.5 41s12-14.2 12-24C24.5 7.6 19 2 12.5 2S.5 7.6.5 17C.5 26.8 12.5 41 12.5 41z" fill="' + color + '" stroke="rgba(0,0,0,0.35)" stroke-width="1"/>' +
+          '<circle cx="12.5" cy="16" r="5.2" fill="white" fill-opacity="0.9"/>' +
+        '</svg>';
+
+      return L.icon({
+        iconUrl: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34]
+      });
+    }
+
+    // grey = closed, green = open, yellow = unknown, purple = location
+    var ICONS = {
+      open: makePinIcon('#2e7d32'),
+      closed: makePinIcon('#757575'),
+      unknown: makePinIcon('#fbc02d'),
+      user: makePinIcon('#7b1fa2') 
+    };
+
+     /* ==============================
+        Office Hours
+        ============================== */
+        
+     // weekdays: 1=Mon ... 7=Sun
+     
+    var officeHours = {
+      "alte-muenze": {
+        tz: "Europe/Berlin",
+        schedule: {
+          1: [{ start: "09:00", end: "22:00" }],
+          2: [{ start: "09:00", end: "22:00" }],
+          3: [{ start: "09:00", end: "22:00" }],
+          4: [{ start: "09:00", end: "22:00" }],
+          5: [{ start: "09:00", end: "22:00" }],
+          6: [{ start: "10:00", end: "18:00" }]
+        }
+      },
+      "jura-bib": {
+        tz: "Europe/Berlin",
+        schedule: {
+          1: [{ start: "08:00", end: "22:00" }],
+          2: [{ start: "08:00", end: "22:00" }],
+          3: [{ start: "08:00", end: "22:00" }],
+          4: [{ start: "08:00", end: "22:00" }],
+          5: [{ start: "08:00", end: "22:00" }],
+          6: [{ start: "08:00", end: "20:00" }],
+          7: [{ start: "10:00", end: "20:00" }]
+        }
+      },
+      "studz": {
+        tz: "Europe/Berlin",
+        schedule: {
+          1: [{ start: "09:00", end: "22:00" }],
+          2: [{ start: "09:00", end: "22:00" }],
+          3: [{ start: "09:00", end: "22:00" }],
+          4: [{ start: "09:00", end: "22:00" }],
+          5: [{ start: "09:00", end: "22:00" }],
+          6: [{ start: "10:00", end: "18:00" }]
+        }
+      },
+      "westerberg": {
+        tz: "Europe/Berlin",
+        schedule: {
+          1: [{ start: "09:00", end: "22:00" }],
+          2: [{ start: "09:00", end: "22:00" }],
+          3: [{ start: "09:00", end: "22:00" }],
+          4: [{ start: "09:00", end: "22:00" }],
+          5: [{ start: "09:00", end: "22:00" }],
+          6: [{ start: "10:00", end: "18:00" }]
+        }
+      },
+      "haste": {
+        tz: "Europe/Berlin",
+        schedule: {
+          1: [{ start: "09:00", end: "20:00" }],
+          2: [{ start: "09:00", end: "20:00" }],
+          3: [{ start: "09:00", end: "20:00" }],
+          4: [{ start: "09:00", end: "20:00" }],
+          5: [{ start: "09:00", end: "20:00" }],
+          6: [{ start: "10:00", end: "14:00" }]
+        }
+      },
+      "lingen": {
+        tz: "Europe/Berlin",
+        schedule: {
+          1: [{ start: "08:00", end: "20:00" }],
+          2: [{ start: "08:00", end: "20:00" }],
+          3: [{ start: "08:00", end: "20:00" }],
+          4: [{ start: "08:00", end: "20:00" }],
+          5: [{ start: "08:00", end: "20:00" }],
+          6: [{ start: "10:00", end: "14:00" }]
+        }
+      }
+    };
+
+	// functions to check if current time in office hours
+    function toMinutes(hhmm) {
+      var parts = hhmm.split(":");
+      return Number(parts[0]) * 60 + Number(parts[1]);
+    }
+
+    function hasKnownOfficeHours(dest) {
+      return !!(dest.officeKey && officeHours[dest.officeKey]) && !dest.officeHoursUnknown;
+    }
+
+    // true=open, false=closed, null=unknown
+    function isOpenNow(dest) {
+      if (!hasKnownOfficeHours(dest)) return null;
+
+      var cfg = officeHours[dest.officeKey];
+      var now = DateTime.now().setZone(cfg.tz);
+      var nowMin = now.hour * 60 + now.minute;
+
+      var windows = cfg.schedule[now.weekday] || [];
+      for (var i = 0; i < windows.length; i++) {
+        var w = windows[i];
+        var s = toMinutes(w.start);
+        var e = toMinutes(w.end);
+        if (nowMin >= s && nowMin <= e) return true;
+      }
+      return false;
+    }
+
+    // if custom text applies today, force yellow icon
+    function hasCustomMessageToday(dest) {
+      if (!dest.customOfficeMessageByWeekday || !hasKnownOfficeHours(dest)) return false;
+      var cfg = officeHours[dest.officeKey];
+      var now = DateTime.now().setZone(cfg.tz);
+      return !!dest.customOfficeMessageByWeekday[now.weekday];
+    }
+
+    /* ==============================
+       Office Hours Panel
+       ============================== */
+
+    function officePanelText(dest) {
+      if (!hasKnownOfficeHours(dest)) {
+        var extra = (dest.unknownOfficeHoursText || "").trim();
+        return extra
+          ? "Keine festen Öffnungszeiten hinterlegt.<br>" + extra
+          : "Keine festen Öffnungszeiten hinterlegt.";
+      }
+
+      var cfg = officeHours[dest.officeKey];
+      var now = DateTime.now().setZone(cfg.tz);
+
+      if (dest.customOfficeMessageByWeekday && dest.customOfficeMessageByWeekday[now.weekday]) {
+        return dest.customOfficeMessageByWeekday[now.weekday];
+      }
+
+      var windows = cfg.schedule[now.weekday] || [];
+      var windowsStr = "geschlossen";
+      if (windows.length) {
+        var parts = [];
+        for (var i = 0; i < windows.length; i++) {
+          parts.push(windows[i].start + " Uhr – " + windows[i].end + " Uhr");
+        }
+        windowsStr = parts.join(", ");
+      }
+
+      return "Heutige Öffnungszeiten: " + windowsStr;
+    }
+
+    function iconForDestination(dest) {
+      if (hasCustomMessageToday(dest)) return ICONS.unknown;
+      var openState = isOpenNow(dest);
+      if (openState === true) return ICONS.open;
+      if (openState === false) return ICONS.closed;
+      return ICONS.unknown;
+    }
+
+    /* ==============================
+       Map
+       ============================== */
+       
+    var map = L.map("map").setView([52.285, 8.04], 13);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    /* ==============================
+       Routing Panel
+       ============================== */
+       
+    var plan = L.Routing.plan([], {
+      geocoder: null,
+      addWaypoints: false,
+      draggableWaypoints: false,
+      createMarker: function () { return null; }
+    });
+
+    var routingControl = L.Routing.control({
+      plan: plan,
+      router: L.Routing.osrmv1({
+        serviceUrl: "https://routing.openstreetmap.de/routed-foot/route/v1",
+        language: "de",
+        timeout: 10000,
+        routingOptions: { alternatives: false, overview: "simplified", steps: true }
+      }),
+      formatter: new L.Routing.Formatter({ language: "de", units: "metric" }),
+      waypoints: [],
+      show: true,
+      routeWhileDragging: false,
+      addWaypoints: false,
+      draggableWaypoints: false,
+      fitSelectedRoutes: true
+    }).addTo(map);
+
+    /* ==============================
+       Box Outside of Routing
+       ============================== */
+       
+    var officeBox = document.createElement("div");
+    officeBox.className = "office-info-box";
+    officeBox.innerHTML =
+      '<div class="office-info-title">Öffnungszeiten</div>' +
+      '<div class="office-info-muted">Bitte einen Safe Point anklicken.</div>';
+
+    // Insert at top of routing panel
+    var routingContainer = routingControl.getContainer();
+    routingContainer.insertBefore(officeBox, routingContainer.firstChild);
+
+    // Prevent panel clicks from dragging map
+    L.DomEvent.disableClickPropagation(officeBox);
+    L.DomEvent.disableScrollPropagation(officeBox);
+
+    function setOfficeBox(dest) {
+      officeBox.innerHTML =
+        '<div class="office-info-title">' + dest.label + '</div>' +
+        '<div>' + officePanelText(dest) + '</div>';
+    }
+
+    /* ==============================
+       Button: Re-Open Panel
+       ============================== */
+       
+    var toggleBtnEl = null;
+
+    function showRoutingPanel() {
+      if (routingControl.show) routingControl.show();
+      L.DomUtil.removeClass(routingContainer, "leaflet-routing-container-hide");
+      L.DomUtil.removeClass(routingContainer, "leaflet-routing-collapsed");
+      if (toggleBtnEl) toggleBtnEl.classList.add("hidden");
+    }
+
+    function hideRoutingPanel() {
+      if (routingControl.hide) routingControl.hide();
+      L.DomUtil.addClass(routingContainer, "leaflet-routing-container-hide");
+      if (toggleBtnEl) toggleBtnEl.classList.remove("hidden");
+    }
+
+    // Leaflet-Control (Box) top right of the map
+    var RoutingShowControl = L.Control.extend({
+      options: { position: "topright" },
+      onAdd: function () {
+        var div = L.DomUtil.create("div", "routing-toggle-control hidden");
+        div.textContent = "Wegbeschreibung anzeigen";
+
+        L.DomEvent.disableClickPropagation(div);
+        L.DomEvent.on(div, "click", function (e) {
+          L.DomEvent.preventDefault(e);
+          showRoutingPanel();
+        });
+
+        toggleBtnEl = div;
+        return div;
+      }
+    });
+    map.addControl(new RoutingShowControl());
+
+    // Hide Completely rather than to the Side
+    var collapseBtn = routingContainer.querySelector(".leaflet-routing-collapse-btn");
+    if (collapseBtn) {
+      L.DomEvent.on(collapseBtn, "click", function (e) {
+        L.DomEvent.preventDefault(e);
+        hideRoutingPanel();
+      });
+    }
+
+
+    /* ==============================
+       Live Location Watch & Update
+       ============================== */
+       
+    var userLatLng = null;
+    var userMarker = null;
+
+    var activeDestLatLng = null;
+    var activeDestName = null;
+    var activeDestId = null; // track currently selected destination
+
+    var lastRerouteAt = 0;
+    var REROUTE_EVERY_MS = 10000;
+
+    map.locate({
+      watch: true,
+      setView: false,
+      enableHighAccuracy: true,
+      maximumAge: 5000
+    });
+
+    map.on("locationfound", function (e) {
+      userLatLng = e.latlng;
+
+      if (!userMarker) {
+		// Pin for current Location
+        userMarker = L.marker(userLatLng, { icon: ICONS.user })
+          .addTo(map)
+          .bindPopup("Sie sind hier.");
+      } else {
+        userMarker.setLatLng(userLatLng);
+      }
+
+      // If a destination has been selected: reroute at most every 10s
+      if (activeDestLatLng) {
+        var nowMs = Date.now();
+        if (nowMs - lastRerouteAt >= REROUTE_EVERY_MS) {
+          routingControl.setWaypoints([
+            L.Routing.waypoint(L.latLng(userLatLng.lat, userLatLng.lng), "Mein Standort"),
+            L.Routing.waypoint(activeDestLatLng, activeDestName)
+          ]);
+          lastRerouteAt = nowMs;
+        }
+      }
+    });
+
+    map.on("locationerror", function () {
+      // Office-Infos sollen trotzdem funktionieren; Routing dann halt nicht.
+    });
+
+    /* ==============================
+       Safe Point Markers
+       ============================== */
+       
+    var destinations = [
+      { lat: 52.273262, lng: 8.045806, label: "Bibliothek Alte Münze", officeKey: "alte-muenze" },
+      { lat: 52.272612, lng: 8.039938, label: "Bereichsbibliothek Heger-Tor-Wall", officeKey: "jura-bib" },
+
+      {
+        lat: 52.270784, lng: 8.046219,
+        label: "Studierendenzentrum",
+        officeKey: "studz",
+        customOfficeMessageByWeekday: {
+          6: "Öffnungszeiten an Samstagen:<br>10:00 Uhr – 14:00 Uhr (Wintersemester)<br>14:00 Uhr – 18:00 Uhr (Sommersemester)"
+        }
+      },
+
+      { lat: 52.285922, lng: 8.022973, label: "Bereichsbibliothek Westerberg", officeKey: "westerberg" },
+      { lat: 52.303053, lng: 8.038385, label: "Bibliothek Campus Haste", officeKey: "haste" },
+      { lat: 52.520089, lng: 7.322911, label: "Bibliothek Campus Lingen", officeKey: "lingen" },
+
+      {
+        lat: 52.272008, lng: 8.047598,
+        label: "Gleichstellungsbüro UOS",
+        officeHoursUnknown: true,
+        unknownOfficeHoursText:
+          " Weitere Auskünfte telefonisch unter <a href=\"tel:+495419694487\">0541/969-4487</a>."
+      },
+
+      {
+        lat: 52.282216, lng: 8.023764,
+        label: "Gleichstellungsbüro HSOS",
+        officeHoursUnknown: true,
+        unknownOfficeHoursText:
+          "<span class=\"nowrap\">Weitere Auskünfte telefonisch unter <a href=\"tel:+495419692966\">0541/969-2955</a>.</span>"
+      }
+    ];
+
+    function addDestination(dest) {
+      var marker = L.marker([dest.lat, dest.lng], { icon: iconForDestination(dest) }).addTo(map);
+
+      marker.on("click", function () {
+        // show office hour and name even without location access
+        setOfficeBox(dest);
+
+        // (re-)open panel when new destination is chosen
+        var newId = dest.officeKey || dest.label;   // stable identifier
+   		var isNewDestination = (activeDestId !== newId);
+    	activeDestId = newId;
+
+    	if (isNewDestination) showRoutingPanel();
+
+        marker.setIcon(iconForDestination(dest));
+
+        // only route when location shared
+        if (!userLatLng) {
+          alert("Für eine Route bitte Standortzugriff erlauben.");
+          return;
+        }
+
+        activeDestLatLng = L.latLng(dest.lat, dest.lng);
+        activeDestName = dest.label;
+
+        routingControl.setWaypoints([
+          L.Routing.waypoint(L.latLng(userLatLng.lat, userLatLng.lng), "Mein Standort"),
+          L.Routing.waypoint(activeDestLatLng, activeDestName)
+        ]);
+      });
+    }
+
+    for (var i = 0; i < destinations.length; i++) addDestination(destinations[i]);
+  </script>
+</body>
+</html>
