@@ -291,7 +291,8 @@
         windowsStr = parts.join(", ");
       }
 
-      return "Heutige Öffnungszeiten: " + windowsStr;
+	return "Heutige Öffnungszeiten: " + windowsStr +
+  		'<br><span class="office-info-muted">(Öffnungszeiten können an Feiertagen abweichen)</span>';
     }
 
     function iconForDestination(dest) {
